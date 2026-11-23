@@ -1,0 +1,306 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  name                 String
+  email                String                @unique
+  passwordHash         String
+  active               Boolean               @default(true)
+  departmentId         String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  userRoles            UserRole[]
+  department           Department?           @relation(fields: [departmentId], references: [id])
+  createdReports       AuditReport[]         @relation("ReportCreator")
+  updatedReports       AuditReport[]         @relation("ReportUpdater")
+  archivedReports      AuditReport[]         @relation("ReportArchiver")
+  createdRecommendations Recommendation[]    @relation("RecommendationCreator")
+  updatedRecommendations Recommendation[]    @relation("RecommendationUpdater")
+  closedRecommendations Recommendation[]     @relation("RecommendationCloser")
+  ownedRecommendations Recommendation[]      @relation("ActionOwner")
+  monitoredRecommendations Recommendation[]  @relation("InternalAuditResponsible")
+  followUps            FollowUpUpdate[]
+  justifications       Justification[]       @relation("JustificationSubmitter")
+  reviewedJustifications Justification[]     @relation("JustificationReviewer")
+  notifications        NotificationLog[]     @relation("NotificationRecipient")
+  auditLogs            AuditLog[]
+  archivedRecommendations Recommendation[]   @relation("RecommendationArchiver")
+  documentUploads      Document[]            @relation("DocumentUploader")
+  profile              UserProfile?
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String
+  userRoles   UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model AuditReport {
+  id              String           @id @default(cuid())
+  reportName      String
+  reportTypeId    String
+  publicationDate DateTime
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedBy       String
+  updatedAt       DateTime         @updatedAt
+  archiveState    ArchiveState     @default(ACTIVE)
+  archivedAt      DateTime?
+  archivedBy      String?
+  reportType      ReportType       @relation(fields: [reportTypeId], references: [id])
+  creator         User             @relation("ReportCreator", fields: [createdBy], references: [id])
+  updater         User             @relation("ReportUpdater", fields: [updatedBy], references: [id])
+  archiver        User?            @relation("ReportArchiver", fields: [archivedBy], references: [id])
+  recommendations Recommendation[]
+
+  @@index([reportName])
+  @@index([publicationDate])
+}
+
+model Recommendation {
+  id                         String                 @id @default(cuid())
+  reportId                   String
+  recommendationNumber       String
+  description                String
+  expectedDeliverable        String
+  actionOwnerId              String?
+  internalAuditResponsibleId String?
+  legalEntityId              String
+  siteId                     String
+  departmentId               String
+  dueDate                    DateTime
+  notificationEnabled        Boolean                @default(false)
+  notificationIntervalDays   Int?
+  statusId                   String
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  createdBy                  String
+  updatedBy                  String
+  closedAt                   DateTime?
+  closedBy                   String?
+  archivedAt                 DateTime?
+  archivedBy                 String?
+  report                     AuditReport            @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actionOwner                User?                  @relation("ActionOwner", fields: [actionOwnerId], references: [id])
+  internalAuditResponsible   User?                  @relation("InternalAuditResponsible", fields: [internalAuditResponsibleId], references: [id])
+  legalEntity                LegalEntity            @relation(fields: [legalEntityId], references: [id])
+  site                       Site                   @relation(fields: [siteId], references: [id])
+  department                 Department             @relation(fields: [departmentId], references: [id])
+  status                     RecommendationStatus   @relation(fields: [statusId], references: [id])
+  creator                    User                   @relation("RecommendationCreator", fields: [createdBy], references: [id])
+  updater                    User                   @relation("RecommendationUpdater", fields: [updatedBy], references: [id])
+  closer                     User?                  @relation("RecommendationCloser", fields: [closedBy], references: [id])
+  archiver                   User?                  @relation("RecommendationArchiver", fields: [archivedBy], references: [id])
+  followUpUpdates            FollowUpUpdate[]
+  justifications             Justification[]
+  notifications              NotificationLog[]
+
+  @@unique([reportId, recommendationNumber])
+  @@index([dueDate])
+  @@index([departmentId])
+  @@index([statusId])
+}
+
+model FollowUpUpdate {
+  id               String          @id @default(cuid())
+  recommendationId String
+  progressComment  String
+  statusSnapshot   String
+  submittedBy      String
+  submittedAt      DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+  recommendation   Recommendation  @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  submitter        User            @relation(fields: [submittedBy], references: [id])
+  justifications   Justification[]
+
+  @@index([recommendationId, submittedAt])
+}
+
+model Justification {
+  id               String             @id @default(cuid())
+  recommendationId String
+  followUpUpdateId String?
+  text             String
+  evidenceRefs     String?
+  submittedBy      String
+  submittedAt      DateTime           @default(now())
+  reviewStatus     ReviewStatus       @default(SUBMITTED)
+  reviewerId       String?
+  reviewDate       DateTime?
+  reviewComment    String?
+  recommendation   Recommendation     @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  followUpUpdate   FollowUpUpdate?    @relation(fields: [followUpUpdateId], references: [id])
+  submitter        User               @relation("JustificationSubmitter", fields: [submittedBy], references: [id])
+  reviewer         User?              @relation("JustificationReviewer", fields: [reviewerId], references: [id])
+
+  @@index([recommendationId, submittedAt])
+}
+
+model NotificationLog {
+  id               String             @id @default(cuid())
+  recommendationId String
+  recipientId      String
+  channel          NotificationChannel
+  eventKey         String
+  scheduledAt      DateTime
+  sentAt           DateTime?
+  deliveryStatus   DeliveryStatus
+  failureReason    String?
+  recommendation   Recommendation     @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  recipient        User               @relation("NotificationRecipient", fields: [recipientId], references: [id])
+
+  @@unique([recommendationId, recipientId, eventKey, scheduledAt])
+  @@index([deliveryStatus])
+}
+
+model ReportType {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  label     String
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  reports   AuditReport[]
+}
+
+model LegalEntity {
+  id        String           @id @default(cuid())
+  code      String           @unique
+  label     String
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  sites     Site[]
+  recommendations Recommendation[]
+}
+
+model Site {
+  id             String           @id @default(cuid())
+  code           String           @unique
+  label          String
+  legalEntityId  String
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  legalEntity    LegalEntity      @relation(fields: [legalEntityId], references: [id])
+  recommendations Recommendation[]
+
+  @@index([legalEntityId])
+}
+
+model Department {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  label           String
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  users           User[]
+  recommendations Recommendation[]
+}
+
+model RecommendationStatus {
+  id               String           @id @default(cuid())
+  code             String           @unique
+  label            String
+  isTerminal       Boolean          @default(false)
+  sortOrder        Int              @default(0)
+  active           Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  recommendations  Recommendation[]
+}
+
+model NotificationSetting {
+  id                      String                @id @default(cuid())
+  channel                 NotificationChannel
+  enabled                 Boolean               @default(false)
+  upcomingDaysBeforeDue   Int                   @default(7)
+  overdueReminderDays     Int                   @default(7)
+  periodicReminderDays    Int                   @default(7)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@unique([channel])
+}
+
+model Document {
+  id              String          @id @default(cuid())
+  title           String
+  description     String?
+  filePath        String
+  category        String
+  uploadedBy      String
+  uploadedAt      DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  uploader        User            @relation("DocumentUploader", fields: [uploadedBy], references: [id])
+}
+
+model AuditLog {
+  id                String    @id @default(cuid())
+  userId            String
+  entityType        String
+  entityId          String
+  action            String
+  timestamp         DateTime  @default(now())
+  previousValues    String?
+  newValues         String?
+  additionalDetails String?
+  user              User      @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId, timestamp])
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  avatarUrl   String?
+  phone       String?
+  locale      String?  @default("en")
+  timezone    String?  @default("UTC")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum ArchiveState {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ReviewStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum DeliveryStatus {
+  SCHEDULED
+  SENT
+  FAILED
+}
