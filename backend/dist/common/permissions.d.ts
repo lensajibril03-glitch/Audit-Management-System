@@ -1,0 +1,2 @@
+export type Permission = 'dashboard.view' | 'reports.view' | 'reports.create' | 'reports.edit' | 'reports.export' | 'recommendations.assign' | 'followup.view.all' | 'followup.view.assigned' | 'followup.submit' | 'followup.export' | 'justification.submit' | 'recommendations.close' | 'recommendations.reopen' | 'department.view' | 'archive.view' | 'archive.manage' | 'archive.export' | 'admin.users.manage' | 'admin.roles.manage' | 'admin.reference.manage' | 'notifications.manage';
+export declare function hasPermission(roles: string[], permission: Permission): boolean;
